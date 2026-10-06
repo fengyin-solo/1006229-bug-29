@@ -1,6 +1,17 @@
 import { MODULE_BY_KEY } from '@/data/modules'
-import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import {
+  allRows,
+  listRows,
+  resetRows,
+  saveRows,
+} from '@/data/local-store'
+import { moduleAbnormalCount } from '@/data/selectors'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
+import {
+  confirmTrashrackClean,
+  resumeCooling,
+  submitCoolingCheck,
+} from './cooling-service'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
@@ -30,6 +41,12 @@ export function listEntries(key: string, filters: Record<string, string> = {}): 
 
 export function runAction(key: string, id: number, action: string): ActionResult {
   const meta = moduleMeta(key)
+
+  // 专用流转：技术供水（提交/复运）与拦污栅确认清污走带取数与台账的实现。
+  if (key === 'cooling' && action === '提交检查') return submitCoolingCheck(id)
+  if (key === 'cooling' && action === '系统复运') return resumeCooling(id)
+  if (key === 'trashrack' && action === '确认完成') return confirmTrashrackClean(id)
+
   const target = meta.actionTargets[action]
   if (!target) {
     return { ok: false, message: `${meta.entity}没有登记「${action}」这个动作` }
@@ -40,6 +57,7 @@ export function runAction(key: string, id: number, action: string): ActionResult
     return { ok: false, message: `没有找到编号为 ${id} 的${meta.entity}` }
   }
   const current = String(rows[index].status)
+  // 终态守卫：已经是目标态直接拒绝。重复提交因此不会重复改变状态/数量。
   if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
@@ -61,14 +79,19 @@ export function resetModule(key: string): PageResult {
   return listEntries(key)
 }
 
+function csvCell(value: unknown): string {
+  const text = value === null || value === undefined ? '' : String(value)
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
 export function exportEntries(key: string): { filename: string; content: string } {
   const meta = moduleMeta(key)
   const header = ['编号', ...meta.fields, '当前状态']
-  const lines = [header.join(',')]
+  const lines = [header.map(csvCell).join(',')]
   for (const row of listRows(key)) {
-    lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].join(','))
+    lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].map(csvCell).join(','))
   }
-  return { filename: `${meta.name}-清单.csv`, content: `\uFEFF${lines.join('\n')}` }
+  return { filename: `${meta.name}-清单.csv`, content: `﻿${lines.join('\n')}` }
 }
 
 export function downloadEntries(key: string): void {
@@ -92,7 +115,8 @@ export function loadOverview(): OverviewResult {
       name: meta.name,
       created: entries.length,
       pending: entries.filter((row) => row.pending).length,
-      abnormal: entries.filter((row) => row.abnormal).length,
+      // 与列表同口径：技术供水按「异常」状态计，复运后这里和列表一起回落。
+      abnormal: moduleAbnormalCount(meta.key, entries),
     }
   })
   const cards = [
