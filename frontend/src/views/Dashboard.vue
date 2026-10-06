@@ -17,7 +17,7 @@
     </div>
     <table class="data-table">
       <thead>
-        <tr><th>业务模块</th><th>今日新增</th><th>待处理</th><th>异常量</th></tr>
+        <tr><th>业务模块</th><th>登记总数</th><th>待处理</th><th>异常量</th><th>停运</th></tr>
       </thead>
       <tbody>
         <tr v-for="row in moduleRows" :key="row.name">
@@ -25,11 +25,12 @@
           <td>{{ row.created }}</td>
           <td>{{ row.pending }}</td>
           <td>{{ row.abnormal }}</td>
+          <td>{{ row.stopped }}</td>
         </tr>
       </tbody>
     </table>
     <footer class="page-foot">
-      <span>数据保存在本机浏览器里，换浏览器或清缓存会回到示例数据</span>
+      <span>异常量与各模块列表、导出清单同一口径（按异常状态统计，停运单独计）；数据保存在本机浏览器里，换浏览器或清缓存会回到示例数据</span>
     </footer>
   </section>
 </template>

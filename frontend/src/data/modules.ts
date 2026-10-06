@@ -1,6 +1,8 @@
 import type { ModuleMeta } from './types'
 
 // 模块元数据由仓库生成时写入：字段、状态、动作、流转目标都在这里，页面不再各自写一遍。
+// abnormalStatuses：异常量统一按状态判定（页面、概览、导出同源）。
+// metrics：统计卡片的计算规则，值一律由本地数据服务现算，不再在页面里写死 0。
 export const MODULES: ModuleMeta[] = [
   {
     key: "station",
@@ -11,7 +13,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["在建", "试运行", "正常运行", "停机检修"],
     actions: ["投入试运行", "确认投产", "申请停机"],
     actionTargets: {"投入试运行": "试运行", "确认投产": "正常运行", "申请停机": "停机检修"},
-    metrics: ["总装机容量", "正常运行电站", "检修中电站"],
+    abnormalStatuses: [],
+    metrics: [
+      { kind: "sum", label: "总装机容量", field: "装机容量" },
+      { kind: "countStatus", label: "正常运行电站", status: "正常运行" },
+      { kind: "countStatus", label: "检修中电站", status: "停机检修" },
+    ],
   },
   {
     key: "unit",
@@ -22,7 +29,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待启动", "运行中", "停机备用", "故障停机"],
     actions: ["开机并网", "停机转备", "登记故障"],
     actionTargets: {"开机并网": "运行中", "停机转备": "停机备用", "登记故障": "故障停机"},
-    metrics: ["运行中机组", "备用机组", "故障机组"],
+    abnormalStatuses: ["故障停机"],
+    metrics: [
+      { kind: "countStatus", label: "运行中机组", status: "运行中" },
+      { kind: "countStatus", label: "备用机组", status: "停机备用" },
+      { kind: "countStatus", label: "故障机组", status: "故障停机" },
+    ],
   },
   {
     key: "governor",
@@ -33,7 +45,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待校验", "正常", "异常", "已停用"],
     actions: ["提交校验", "标记异常", "停用装置"],
     actionTargets: {"提交校验": "正常", "标记异常": "异常", "停用装置": "已停用"},
-    metrics: ["正常调速器", "待校验装置", "异常装置"],
+    abnormalStatuses: ["异常"],
+    metrics: [
+      { kind: "countStatus", label: "正常调速器", status: "正常" },
+      { kind: "countStatus", label: "待校验装置", status: "待校验" },
+      { kind: "countStatus", label: "异常装置", status: "异常" },
+    ],
   },
   {
     key: "excitation",
@@ -44,7 +61,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待检查", "正常", "异常", "已退出"],
     actions: ["提交检查", "标记异常", "退出运行"],
     actionTargets: {"提交检查": "正常", "标记异常": "异常", "退出运行": "已退出"},
-    metrics: ["正常装置", "异常装置", "待检查装置"],
+    abnormalStatuses: ["异常"],
+    metrics: [
+      { kind: "countStatus", label: "正常装置", status: "正常" },
+      { kind: "countStatus", label: "异常装置", status: "异常" },
+      { kind: "countStatus", label: "待检查装置", status: "待检查" },
+    ],
   },
   {
     key: "transformer",
@@ -55,7 +77,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待试验", "运行中", "告警", "停运"],
     actions: ["提交试验", "发布告警", "停运检修"],
     actionTargets: {"提交试验": "运行中", "发布告警": "告警", "停运检修": "停运"},
-    metrics: ["运行变压器", "告警变压器", "待试验变压器"],
+    abnormalStatuses: ["告警"],
+    metrics: [
+      { kind: "countStatus", label: "运行变压器", status: "运行中" },
+      { kind: "countStatus", label: "告警变压器", status: "告警" },
+      { kind: "countStatus", label: "待试验变压器", status: "待试验" },
+    ],
   },
   {
     key: "gate",
@@ -66,7 +93,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待操作", "运行中", "已关闭", "故障"],
     actions: ["开启闸门", "关闭闸门", "登记故障"],
     actionTargets: {"开启闸门": "运行中", "关闭闸门": "已关闭", "登记故障": "故障"},
-    metrics: ["开启闸门", "关闭闸门", "故障闸门"],
+    abnormalStatuses: ["故障"],
+    metrics: [
+      { kind: "countStatus", label: "开启闸门", status: "运行中" },
+      { kind: "countStatus", label: "关闭闸门", status: "已关闭" },
+      { kind: "countStatus", label: "故障闸门", status: "故障" },
+    ],
   },
   {
     key: "seepage",
@@ -77,29 +109,45 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["正常", "预警", "报警", "已处理"],
     actions: ["提交监测", "发布预警", "确认处理"],
     actionTargets: {"提交监测": "预警", "发布预警": "报警", "确认处理": "已处理"},
-    metrics: ["正常测点", "预警测点", "最大渗流量"],
+    abnormalStatuses: ["预警", "报警"],
+    metrics: [
+      { kind: "countStatus", label: "正常测点", status: "正常" },
+      { kind: "countStatus", label: "预警测点", status: "预警" },
+      { kind: "max", label: "最大渗流量", field: "渗流量" },
+    ],
   },
   {
     key: "displacement",
     name: "位移监测",
     entity: "位移测点",
-    desc: "维护位移测点，围绕测点编号、测点高程、水平位移、垂直位移做登记、筛选与状态流转。",
+    desc: "维护位移监测，围绕测点编号、测点高程、水平位移、垂直位移做登记、筛选与状态流转。",
     fields: ["测点编号", "测点高程", "水平位移", "垂直位移", "累计位移", "允许位移", "监测频次", "测点状态"],
     statuses: ["待观测", "观测中", "超限", "已复核"],
     actions: ["提交观测", "标记超限", "提交复核"],
     actionTargets: {"提交观测": "观测中", "标记超限": "超限", "提交复核": "已复核"},
-    metrics: ["观测中测点", "超限测点", "平均位移"],
+    abnormalStatuses: ["超限"],
+    metrics: [
+      { kind: "countStatus", label: "观测中测点", status: "观测中" },
+      { kind: "countStatus", label: "超限测点", status: "超限" },
+      { kind: "avg", label: "平均位移", field: "累计位移" },
+    ],
   },
   {
     key: "trashrack",
     name: "拦污栅",
     entity: "拦污栅",
-    desc: "维护拦污栅，围绕栅体编号、所属机组、前后压差、清污次数做登记、筛选与状态流转。",
+    desc: "维护拦污栅，围绕栅体编号、所属机组、前后压差、清污次数做登记、筛选与状态流转。清污次数以值班台账为准，台账与清单联动。",
     fields: ["栅体编号", "所属机组", "前后压差", "清污次数", "清污方式", "清理日期", "清理人员", "栅体状态"],
     statuses: ["待清理", "清理中", "已清理", "已损坏"],
     actions: ["安排清理", "确认完成", "登记损坏"],
     actionTargets: {"安排清理": "清理中", "确认完成": "已清理", "登记损坏": "已损坏"},
-    metrics: ["待清理栅体", "已清理栅体", "最大压差"],
+    actionStatuses: {"安排清理": ["待清理"], "确认完成": ["清理中"], "登记损坏": ["待清理", "清理中", "已清理"]},
+    abnormalStatuses: ["已损坏"],
+    metrics: [
+      { kind: "countStatus", label: "待清理栅体", status: "待清理" },
+      { kind: "countStatus", label: "已清理栅体", status: "已清理" },
+      { kind: "custom", label: "累计清污条数", name: "cleaningTotal" },
+    ],
   },
   {
     key: "overhaul",
@@ -110,7 +158,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待审批", "已批准", "检修中", "已完工"],
     actions: ["提交审批", "开工检修", "办理完工"],
     actionTargets: {"提交审批": "已批准", "开工检修": "检修中", "办理完工": "已完工"},
-    metrics: ["待审批工作票", "检修中机组", "已完工检修"],
+    abnormalStatuses: [],
+    metrics: [
+      { kind: "countStatus", label: "待审批工作票", status: "待审批" },
+      { kind: "countStatus", label: "检修中机组", status: "检修中" },
+      { kind: "countStatus", label: "已完工检修", status: "已完工" },
+    ],
   },
   {
     key: "bearing",
@@ -121,18 +174,31 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["正常", "温度偏高", "待检修", "已检修"],
     actions: ["提交检测", "标记偏高", "确认检修"],
     actionTargets: {"提交检测": "温度偏高", "标记偏高": "待检修", "确认检修": "已检修"},
-    metrics: ["正常轴承", "温度偏高轴承", "待检修轴承"],
+    abnormalStatuses: ["温度偏高", "待检修"],
+    metrics: [
+      { kind: "countStatus", label: "正常轴承", status: "正常" },
+      { kind: "countStatus", label: "温度偏高轴承", status: "温度偏高" },
+      { kind: "countStatus", label: "待检修轴承", status: "待检修" },
+    ],
   },
   {
     key: "cooling",
     name: "技术供水",
     entity: "供水系统",
-    desc: "维护供水系统，围绕系统编号、供水类型、供水压力、供水流量做登记、筛选与状态流转。",
-    fields: ["系统编号", "供水类型", "供水压力", "供水流量", "水温数值", "滤水器压差", "检查日期", "系统状态"],
+    desc: "维护供水系统，围绕系统编号、所属机组、供水类型、供水压力、供水流量做登记、筛选与状态流转。取数失败留空并可重试，实测值优先于限值；复运时异常、停运标记与滤水器压差一并归位，并联动拦污栅清污台账。",
+    fields: ["系统编号", "所属机组", "供水类型", "供水压力", "供水流量", "水温数值", "滤水器压差", "检查日期", "系统状态"],
     statuses: ["待检查", "运行中", "异常", "已停运"],
-    actions: ["提交检查", "标记异常", "停运系统"],
-    actionTargets: {"提交检查": "运行中", "标记异常": "异常", "停运系统": "已停运"},
-    metrics: ["运行系统", "异常系统", "待检查系统"],
+    actions: ["提交检查", "标记异常", "停运系统", "系统复运"],
+    actionTargets: {"提交检查": "运行中", "标记异常": "异常", "停运系统": "已停运", "系统复运": "运行中"},
+    actionStatuses: {"提交检查": ["待检查"], "标记异常": ["待检查", "运行中"], "停运系统": ["运行中", "异常"], "系统复运": ["异常", "已停运"]},
+    abnormalStatuses: ["异常"],
+    metrics: [
+      { kind: "countStatus", label: "运行系统", status: "运行中" },
+      { kind: "countStatus", label: "异常系统", status: "异常" },
+      { kind: "countStatus", label: "待检查系统", status: "待检查" },
+      { kind: "countStatus", label: "停运系统", status: "已停运" },
+      { kind: "custom", label: "联动清污条数", name: "cleaningTotal" },
+    ],
   },
   {
     key: "hydrology",
@@ -143,7 +209,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待观测", "已观测", "已调度", "已复核"],
     actions: ["提交观测", "下达调度", "提交复核"],
     actionTargets: {"提交观测": "已观测", "下达调度": "已调度", "提交复核": "已复核"},
-    metrics: ["今日入库流量", "今日出库流量", "待调度记录"],
+    abnormalStatuses: [],
+    metrics: [
+      { kind: "last", label: "最新入库流量", field: "入库流量" },
+      { kind: "last", label: "最新出库流量", field: "出库流量" },
+      { kind: "countStatus", label: "待调度记录", status: "待观测" },
+    ],
   },
   {
     key: "flood",
@@ -154,7 +225,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待审批", "已批准", "泄洪中", "已结束"],
     actions: ["提交审批", "开启泄洪", "结束泄洪"],
     actionTargets: {"提交审批": "已批准", "开启泄洪": "泄洪中", "结束泄洪": "已结束"},
-    metrics: ["待审批操作", "泄洪中闸门", "今日泄洪量"],
+    abnormalStatuses: [],
+    metrics: [
+      { kind: "countStatus", label: "待审批操作", status: "待审批" },
+      { kind: "countStatus", label: "泄洪中闸门", status: "泄洪中" },
+      { kind: "sum", label: "今日泄洪量", field: "泄洪流量" },
+    ],
   },
   {
     key: "generation",
@@ -165,7 +241,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待编制", "已下达", "执行中", "已完成"],
     actions: ["提交编制", "下达计划", "确认完成"],
     actionTargets: {"提交编制": "已下达", "下达计划": "执行中", "确认完成": "已完成"},
-    metrics: ["计划发电量", "实际发电量", "计划完成率"],
+    abnormalStatuses: [],
+    metrics: [
+      { kind: "sum", label: "计划发电量", field: "计划出力" },
+      { kind: "sum", label: "实际发电量", field: "实际出力" },
+      { kind: "avg", label: "平均完成率", field: "完成比率" },
+    ],
   },
   {
     key: "protection",
@@ -176,7 +257,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待校验", "正常", "异常", "已退出"],
     actions: ["提交校验", "标记异常", "退出运行"],
     actionTargets: {"提交校验": "正常", "标记异常": "异常", "退出运行": "已退出"},
-    metrics: ["正常保护装置", "待校验装置", "即将到期装置"],
+    abnormalStatuses: ["异常"],
+    metrics: [
+      { kind: "countStatus", label: "正常保护装置", status: "正常" },
+      { kind: "countStatus", label: "待校验装置", status: "待校验" },
+      { kind: "expiring", label: "30日内到期装置", field: "下次校验日", days: 30 },
+    ],
   },
   {
     key: "defect",
@@ -187,7 +273,12 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待处理", "处理中", "已消除", "已挂账"],
     actions: ["派发处理", "确认消除", "登记挂账"],
     actionTargets: {"派发处理": "处理中", "确认消除": "已消除", "登记挂账": "已挂账"},
-    metrics: ["待处理缺陷", "处理中缺陷", "已消除缺陷"],
+    abnormalStatuses: ["待处理", "处理中", "已挂账"],
+    metrics: [
+      { kind: "countStatus", label: "待处理缺陷", status: "待处理" },
+      { kind: "countStatus", label: "处理中缺陷", status: "处理中" },
+      { kind: "countStatus", label: "已消除缺陷", status: "已消除" },
+    ],
   },
   {
     key: "crew",
@@ -198,18 +289,29 @@ export const MODULES: ModuleMeta[] = [
     statuses: ["待进场", "在场", "已离场", "已停工"],
     actions: ["办理进场", "办理离场", "登记停工"],
     actionTargets: {"办理进场": "在场", "办理离场": "已离场", "登记停工": "已停工"},
-    metrics: ["在场人员", "持证人员", "证书即将到期"],
+    abnormalStatuses: ["已停工"],
+    metrics: [
+      { kind: "countStatus", label: "在场人员", status: "在场" },
+      { kind: "countFilled", label: "持证人员", field: "持证类型" },
+      { kind: "expiring", label: "证书90日内到期", field: "证书有效期", days: 90 },
+    ],
   },
   {
     key: "spare",
     name: "备品备件",
     entity: "备品备件",
-    desc: "维护备品备件，围绕备件编号、备件名称、规格型号、适用设备做登记、筛选与状态流转。",
+    desc: "维护备品备件，围绕备件编号、备件名称、规格型号、适用设备做登记、筛选与状态流转。同一备件重复领用只扣一次数量。",
     fields: ["备件编号", "备件名称", "规格型号", "适用设备", "存放位置", "现有数量", "最低储备量", "备件状态"],
     statuses: ["待验收", "已登记", "已领用", "待补充"],
     actions: ["办理验收", "领用备件", "提交补充"],
     actionTargets: {"办理验收": "已登记", "领用备件": "已领用", "提交补充": "待补充"},
-    metrics: ["已登记备件", "待补充备件", "本月领用"],
+    actionStatuses: {"办理验收": ["待验收", "待补充"], "领用备件": ["已登记", "已领用", "待补充"], "提交补充": ["已登记", "已领用"]},
+    abnormalStatuses: ["待补充"],
+    metrics: [
+      { kind: "countStatus", label: "已登记备件", status: "已登记" },
+      { kind: "countStatus", label: "待补充备件", status: "待补充" },
+      { kind: "countStatus", label: "本月领用", status: "已领用" },
+    ],
   },
 ]
 
